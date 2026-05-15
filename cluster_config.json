@@ -1,0 +1,15 @@
+{
+  "cluster_name": "Scraper-Cluster",
+  "spark_version": "14.3.x-scala2.12",
+  "node_type_id": "Standard_DS3_v2",
+  "autotermination_minutes": 30,
+  "num_workers": 0,
+  "data_security_mode": "SINGLE_USER",
+  "init_scripts": [
+    {
+      "workspace": {
+        "destination": "/Workspace/Users/abhiram.jella@celebaltech.com/init_playwright.sh"
+      }
+    }
+  ]
+}

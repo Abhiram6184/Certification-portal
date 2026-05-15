@@ -1,0 +1,665 @@
+# Certification Portal - Architecture & Data Flow Diagrams
+
+## 🏗️ System Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         FRONTEND (React)                        │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
+│  │ Employee View│  │  Admin View  │  │  Leaderboard │           │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘           │
+│         │                  │                  │                 │
+│         └──────────────────┴──────────────────┘                 │
+│                           │                                     │
+│                    ┌──────▼──────┐                              │
+│                    │  API Service │                             │
+│                    │  (api.ts)    │                             │
+│                    └──────┬───────┘                             │
+└───────────────────────────┼─────────────────────────────────────┘
+                            │ HTTP/REST
+                            │
+┌───────────────────────────▼─────────────────────────────────────┐
+│                    BACKEND (Node.js/Express)                    │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                    Express Server                        │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │  │
+│  │  │   Scraper    │  │   Voucher    │  │  Bulk Upload │    │  │
+│  │  │   Routes     │  │   Routes     │  │   Routes     │    │  │
+│  │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘    │  │
+│  └─────────┼──────────────────┼──────────────────┼──────────┘  │
+│            │                  │                  │             │
+│  ┌─────────▼─────────┐  ┌────▼──────┐  ┌────────▼────────┐    │
+│  │   Playwright      │  │ Nodemailer│  │  Gemini AI      │   │
+│  │   (Web Scraping)  │  │  (Emails) │  │  (Extraction)   │   │
+│  └───────────────────┘  └───────────┘  └─────────────────┘   │
+│                                                               │
+└───────────────────────────┬───────────────────────────────────┘
+                            │
+                            │ SQL Queries
+                            │
+┌───────────────────────────▼─────────────────────────────────────┐
+│              DATABRICKS SQL WAREHOUSE (Delta Lake)             │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  EmployeeDetails  │  credentials  │  voucher_requests   │  │
+│  │                   │               │  voucher_codes      │  │
+│  │                   │  v_credentials (View)               │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🔄 Voucher Request Flow
+
+```
+┌─────────────┐
+│  Employee   │
+│  Requests   │
+│  Voucher    │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────┐      ┌──────────────────┐
+│  POST /api/     │─────▶│  Validate Email  │
+│  request-voucher│      │  in EmployeeDetails
+└──────┬──────────┘      └─────────┬────────┘
+       │                           │
+       │                    ┌──────▼──────┐
+       │                    │  Insert into │
+       │                    │voucher_requests
+       │                    │ (status: Pending)
+       │                    └──────┬──────┘
+       │                           │
+       │                    ┌──────▼──────────────┐
+       │                    │  Send Emails        │
+       │                    │  - L&D Notification│
+       │                    │  - Employee Ack    │
+       │                    └──────┬─────────────┘
+       │                           │
+       ▼                           ▼
+┌─────────────────┐      ┌──────────────────┐
+│  Request Saved  │      │  Emails Sent     │
+│  to Database    │      │  (Async, Non-    │
+│                 │      │   blocking)      │
+└─────────────────┘      └──────────────────┘
+
+                    ┌─────────────┐
+                    │    Admin    │
+                    │   Reviews   │
+                    └──────┬──────┘
+                           │
+                    ┌──────▼──────┐
+                    │  GET /api/  │
+                    │admin/all-   │
+                    │  requests   │
+                    └──────┬──────┘
+                           │
+                    ┌──────▼──────────────┐
+                    │  Admin Approves     │
+                    │  POST /api/approve- │
+                    │  and-assign         │
+                    └──────┬──────────────┘
+                           │
+                    ┌──────▼──────────────┐
+                    │  Check voucher_codes│
+                    │  for availability   │
+                    └──────┬──────────────┘
+                           │
+          ┌────────────────┴────────────────┐
+          │                                  │
+    ┌─────▼─────┐                    ┌──────▼──────┐
+    │  Voucher  │                    │  No Voucher │
+    │ Available │                    │ Available   │
+    └─────┬─────┘                    └──────┬──────┘
+          │                                  │
+    ┌─────▼──────────────┐          ┌───────▼──────────┐
+    │  Auto-assign       │          │  Set status to   │
+    │  Update status to  │          │  'Approved'      │
+    │  'Fulfilled'       │          │  (Manual assign  │
+    │  Send celebratory  │          │   later)         │
+    │  email with code   │          └──────────────────┘
+    └────────────────────┘
+```
+
+---
+
+## 🤖 AI Certificate Extraction Flow
+
+```
+┌─────────────┐
+│  Employee   │
+│  Uploads    │
+│  PDF/Image  │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────┐
+│  File to Base64 │
+│  Conversion     │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐      ┌──────────────────┐
+│  POST /api/     │─────▶│  Gemini AI       │
+│extract-from-file│      │  gemini-2.5-flash│
+└──────┬──────────┘      └─────────┬────────┘
+       │                           │
+       │                    ┌──────▼──────────────┐
+       │                    │  Process with       │
+       │                    │  Structured Schema  │
+       │                    │  - issuer_name      │
+       │                    │  - credential_name  │
+       │                    │  - holder_full_name │
+       │                    │  - issued_date      │
+       │                    │  - expiry_date      │
+       │                    └──────┬─────────────┘
+       │                           │
+       │                    ┌──────▼──────┐
+       │                    │  Return JSON│
+       │                    │  Response   │
+       │                    └──────┬──────┘
+       │                           │
+       ▼                           ▼
+┌─────────────────┐      ┌──────────────────┐
+│  Frontend       │      │  Employee        │
+│  Displays       │      │  Reviews &       │
+│  Extracted Data │      │  Confirms        │
+└──────┬──────────┘      └─────────┬────────┘
+       │                           │
+       └───────────┬───────────────┘
+                   │
+                   ▼
+          ┌─────────────────┐
+          │  POST /api/     │
+          │add-certificate  │
+          └────────┬────────┘
+                   │
+                   ▼
+          ┌─────────────────┐
+          │  MERGE into     │
+          │  credentials    │
+          │  table          │
+          └─────────────────┘
+```
+
+---
+
+## 🕷️ Web Scraping Flow
+
+```
+┌─────────────┐
+│  Employee   │
+│  Provides   │
+│  Databricks │
+│  Profile URL│
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────┐
+│  POST /api/     │
+│scrape-and-add-  │
+│  by-url         │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Playwright     │
+│  Launch Browser │
+│  (Headless)     │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Navigate to    │
+│  Profile URL    │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Wait for       │
+│  Credentials to │
+│  Load           │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Extract Total  │
+│  Credential     │
+│  Count          │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Scroll Page    │
+│  Until All      │
+│  Credentials    │
+│  Visible        │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Extract Basic  │
+│  Info from All  │
+│  Tiles:         │
+│  - Title        │
+│  - Issue Date   │
+│  - Credential ID│
+│  - Detail URL   │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  For Each       │
+│  Credential:    │
+│  - Open Detail  │
+│    Page         │
+│  - Extract      │
+│    Expiry Date  │
+│  (Parallel)     │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Combine All    │
+│  Data           │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  MERGE into     │
+│  credentials    │
+│  (Prevent       │
+│   Duplicates)   │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Return Updated │
+│  Credentials    │
+│  to Frontend    │
+└─────────────────┘
+```
+
+---
+
+## 📧 Email Notification Flow
+
+```
+┌─────────────────┐
+│  Event Triggered│
+│  (Request/      │
+│   Approval/     │
+│   Rejection)    │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Nodemailer     │
+│  Create         │
+│  Transporter    │
+│  (Gmail SMTP)   │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Select Email   │
+│  Template       │
+│  - L&D Notify   │
+│  - Acknowledgment│
+│  - Approval     │
+│  - Rejection    │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  For Approval:  │
+│  Randomly Select│
+│  from 6         │
+│  Celebration    │
+│  Templates      │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Replace        │
+│  Placeholders:  │
+│  - [Employee    │
+│     Name]       │
+│  - [Certification│
+│     Name]       │
+│  - [Voucher ID] │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Send Email     │
+│  (Async, Non-   │
+│   blocking)     │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Log Result     │
+│  (Success/      │
+│   Failure)      │
+└─────────────────┘
+```
+
+---
+
+## 🗄️ Database Schema Relationships
+
+```
+┌──────────────────┐
+│ EmployeeDetails  │
+│──────────────────│
+│ Emp_Code (PK)    │◄────┐
+│ Employee_Name    │     │
+│ Employee_EmailID │     │
+│ Designation      │     │
+└──────────────────┘     │
+                         │
+                         │ FK: user_id
+                         │
+┌──────────────────┐     │
+│voucher_requests  │     │
+│──────────────────│     │
+│ id (PK)          │     │
+│ user_id (FK)     ├─────┘
+│ cert_type        │
+│ cert_provider    │
+│ status           │
+│ requested_at     │
+│ voucher_id       │
+│ approved_at      │
+│ rejected_at      │
+│ fulfilled_at     │
+│ personal_email   │
+│ denial_reason    │
+│ reviewed_by      │
+└──────────────────┘
+
+┌──────────────────┐
+│  credentials     │
+│──────────────────│
+│ credential_id(PK)│
+│ username         │
+│ emp_code         │
+│ full_name        │
+│ credential_title │
+│ issued_on        │
+│ expiry_date      │
+└────────┬─────────┘
+         │
+         │ Query
+         │
+┌────────▼─────────┐
+│  v_credentials   │
+│    (View)        │
+│──────────────────│
+│ credential_id    │
+│ username         │
+│ emp_code         │
+│ full_name        │
+│ credential_title │
+│ issued_on        │
+│ expiry_date      │
+│ status (CALC)    │◄─── Calculated dynamically
+└──────────────────┘
+
+┌──────────────────┐
+│ voucher_codes    │
+│──────────────────│
+│ Credential_Name  │
+│ Voucher_Code (PK)│
+│ Expiry_Date      │
+│ status           │
+└──────────────────┘
+```
+
+---
+
+## 🔐 Authentication Flow
+
+```
+┌─────────────┐
+│  Employee   │
+│  Enters     │
+│  Email      │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────┐
+│  POST /api/     │
+│  email-login    │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Validate       │
+│  Email Domain   │
+│  (@celebaltech) │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐      ┌──────────────────┐
+│  Query          │─────▶│  EmployeeDetails │
+│  EmployeeDetails│      │  Table           │
+│  by Email       │      └─────────┬────────┘
+└──────┬──────────┘                │
+       │                           │
+       │                    ┌──────▼──────┐
+       │                    │  Found?     │
+       │                    └──────┬──────┘
+       │                           │
+       │         ┌─────────────────┴─────────────────┐
+       │         │                                     │
+       ▼         ▼                                     ▼
+┌──────────┐  ┌──────────┐                      ┌──────────┐
+│   YES    │  │    NO    │                      │  Error   │
+│          │  │          │                      │          │
+│  Fetch   │  │  Return  │                      │  Return  │
+│Credentials│  │newUser:  │                      │  Error   │
+│from      │  │true      │                      │          │
+│v_credentials│  │Prompt for│                      │          │
+│          │  │Registration│                      │          │
+└────┬─────┘  └────┬─────┘                      └──────────┘
+     │             │
+     │             ▼
+     │     ┌──────────────┐
+     │     │  Employee    │
+     │     │  Provides:   │
+     │     │  - Emp_Code  │
+     │     │  - Name      │
+     │     │  - Designation│
+     │     └──────┬───────┘
+     │             │
+     │             ▼
+     │     ┌──────────────┐
+     │     │  POST /api/  │
+     │     │register-     │
+     │     │employee      │
+     │     └──────┬───────┘
+     │             │
+     │             ▼
+     │     ┌──────────────┐
+     │     │  Insert into │
+     │     │EmployeeDetails│
+     │     └──────┬───────┘
+     │             │
+     └─────────────┘
+                   │
+                   ▼
+          ┌─────────────────┐
+          │  Return User    │
+          │  Profile +      │
+          │  Empty          │
+          │  Credentials    │
+          └─────────────────┘
+```
+
+---
+
+## 📊 Leaderboard Query Flow
+
+```
+┌─────────────┐
+│  Frontend   │
+│  Requests   │
+│  Leaderboard│
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────┐
+│  GET /api/      │
+│  leaderboard    │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────────────────────────────────┐
+│  SQL Query:                                  │
+│  SELECT                                      │
+│    e.Emp_Code,                               │
+│    e.Employee_Name,                          │
+│    e.Designation,                            │
+│    COUNT(c.credential_id) AS credential_count│
+│  FROM EmployeeDetails e                      │
+│  LEFT JOIN v_credentials c                   │
+│    ON e.Emp_Code = c.emp_code               │
+│  GROUP BY e.Emp_Code, ...                   │
+│  ORDER BY credential_count DESC             │
+│                                              │
+│  DENSE_RANK() OVER (ORDER BY ...) AS rank   │
+└──────┬──────────────────────────────────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Calculate      │
+│  Summary Stats: │
+│  - Total        │
+│    Employees    │
+│  - Total        │
+│    Credentials  │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Return JSON    │
+│  Response       │
+└─────────────────┘
+```
+
+---
+
+## 🔄 Bulk Upload Flow
+
+```
+┌─────────────┐
+│  Admin      │
+│  Uploads    │
+│  CSV File   │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────┐
+│  Convert to     │
+│  Base64         │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  POST /api/     │
+│admin/bulk-upload│
+│  -credentials   │
+│  -vouchers      │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Decode CSV     │
+│  Parse Headers  │
+│  Validate       │
+│  Required       │
+│  Columns        │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  For Credentials:│
+│  Validate Emails│
+│  Against        │
+│  EmployeeDetails│
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Build MERGE    │
+│  Statement      │
+│  with VALUES    │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Execute MERGE  │
+│  (Upsert)       │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Collect Errors │
+│  and Success    │
+│  Counts         │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Return Result: │
+│  - processed    │
+│  - success      │
+│  - errors       │
+└─────────────────┘
+```
+
+---
+
+## 🎯 Status Calculation Logic
+
+```
+┌─────────────────┐
+│  Query          │
+│  v_credentials  │
+│  View           │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────────────────────────────────┐
+│  View Definition:                            │
+│                                              │
+│  SELECT *,                                   │
+│    CASE                                      │
+│      WHEN expiry_date = 'Does not expire'   │
+│        THEN 'Active'                         │
+│      WHEN expiry_date IS NULL                │
+│        THEN 'Active'                         │
+│      WHEN CAST(expiry_date AS DATE)          │
+│           >= CURRENT_DATE()                  │
+│        THEN 'Active'                         │
+│      ELSE 'Expired'                          │
+│    END AS status                             │
+│  FROM credentials                            │
+└──────┬──────────────────────────────────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Status         │
+│  Calculated     │
+│  Dynamically    │
+│  (Always        │
+│   Current)      │
+└─────────────────┘
+```
+
+---
+
+**Use these diagrams to explain the system architecture during your presentation! 📊**
+
