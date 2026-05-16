@@ -66,6 +66,7 @@ export interface EmployeeRegistrationData {
   employee_name: string;
   designation: string;
   email: string;
+  profile_url?: string;
 }
 
 export interface VoucherRequestData {

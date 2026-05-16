@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { extractCertificateData, extractCertificateDataFromUrl, scrapeAndAddByUrl } from '../services/api';
+import { extractCertificateData, extractCertificateDataFromUrl } from '../services/api';
 import { ExtractedCertificate, User, CertificationRequest } from '../types';
 
 import UploadZone from './upload/UploadZone';
@@ -12,13 +12,12 @@ interface UploadCertificateModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (certificateData: ExtractedCertificate) => Promise<void>;
-  onSaveMany: (certs: CertificationRequest[]) => void;
   currentUser: User;
 }
 
-type Stage = 'upload' | 'processing' | 'scraping' | 'preview' | 'saving';
+type Stage = 'upload' | 'processing' | 'preview' | 'saving';
 
-export default function UploadCertificateModal({ isOpen, onClose, onSave, onSaveMany, currentUser }: UploadCertificateModalProps) {
+export default function UploadCertificateModal({ isOpen, onClose, onSave, currentUser }: UploadCertificateModalProps) {
   const [dragActive, setDragActive] = useState(false);
   const [stage, setStage] = useState<Stage>('upload');
   const [progress, setProgress] = useState(0);
@@ -78,33 +77,6 @@ export default function UploadCertificateModal({ isOpen, onClose, onSave, onSave
     }
   };
 
-  const handleWalletUrlSelect = async (url: string) => {
-    setError(null);
-    setStage('scraping');
-    setProcessingSource(url);
-    setProgress(0);
-    
-    try {
-        const progressInterval = setInterval(() => {
-            setProgress(prev => Math.min(prev + 10, 95));
-        }, 500);
-
-        const newCerts = await scrapeAndAddByUrl(url, currentUser);
-        
-        clearInterval(progressInterval);
-        setProgress(100);
-
-        setTimeout(() => {
-            onSaveMany(newCerts);
-            // Parent component handles closing the modal on success
-        }, 500);
-
-    } catch (err: any) {
-        setError(err.message || "Failed to scrape credentials from the provided wallet URL. Please check the URL and try again.");
-        console.error("Error scraping wallet:", err);
-        setStage('upload');
-    }
-  };
 
   const handleFileSelect = async (file: File) => {
     setSelectedFile(file);
@@ -160,14 +132,6 @@ export default function UploadCertificateModal({ isOpen, onClose, onSave, onSave
 
   const renderContent = () => {
     switch (stage) {
-      case 'scraping':
-        return (
-          <div className="flex justify-center py-16">
-            <div className="w-full max-w-md">
-              <EtlLoader label="Scraping credentials from wallet..." />
-            </div>
-          </div>
-        );
       case 'processing':
         return (
           <div className="flex justify-center py-16">
@@ -199,7 +163,6 @@ export default function UploadCertificateModal({ isOpen, onClose, onSave, onSave
           <UploadZone
             onFileSelect={handleFileSelect}
             onPdfUrlSelect={handlePdfUrlSelect}
-            onWalletUrlSelect={handleWalletUrlSelect}
             dragActive={dragActive}
             setDragActive={setDragActive}
             error={error}

@@ -8,17 +8,15 @@ import LinkIcon from '../icons/LinkIcon';
 interface UploadZoneProps {
   onFileSelect: (file: File) => void;
   onPdfUrlSelect: (url: string) => void;
-  onWalletUrlSelect: (url: string) => void;
   dragActive: boolean;
   setDragActive: (isActive: boolean) => void;
   error: string | null;
   setError: (error: string | null) => void;
 }
 
-export default function UploadZone({ onFileSelect, onPdfUrlSelect, onWalletUrlSelect, dragActive, setDragActive, error, setError }: UploadZoneProps) {
+export default function UploadZone({ onFileSelect, onPdfUrlSelect, dragActive, setDragActive, error, setError }: UploadZoneProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pdfUrl, setPdfUrl] = useState('');
-  const [walletUrl, setWalletUrl] = useState('');
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -59,8 +57,8 @@ export default function UploadZone({ onFileSelect, onPdfUrlSelect, onWalletUrlSe
     fileInputRef.current?.click();
   };
   
-  const handleUrlSubmit = (type: 'pdf' | 'wallet') => {
-    const url = type === 'pdf' ? pdfUrl : walletUrl;
+  const handleUrlSubmit = () => {
+    const url = pdfUrl;
     if (!url.trim()) {
         setError("Please enter a valid URL.");
         return;
@@ -72,11 +70,7 @@ export default function UploadZone({ onFileSelect, onPdfUrlSelect, onWalletUrlSe
         return;
     }
     setError(null);
-    if (type === 'pdf') {
-        onPdfUrlSelect(url);
-    } else {
-        onWalletUrlSelect(url);
-    }
+    onPdfUrlSelect(url);
   };
 
   // Check if this is a name validation error (should be displayed larger)
@@ -186,31 +180,8 @@ export default function UploadZone({ onFileSelect, onPdfUrlSelect, onWalletUrlSe
         <div className="flex-grow border-t border-gray-200 dark:border-slate-700"></div>
       </div>
       
-      <div className="grid md:grid-cols-2 gap-8">
-        <div>
-            <label htmlFor="wallet-url" className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                <img src="/components/images/databricks-logo.webp" alt="Databricks" className="w-5 h-5" />
-                Add from Databricks Wallet
-            </label>
-            <div className="mt-1 flex rounded-md shadow-sm">
-                <input
-                    type="url"
-                    id="wallet-url"
-                    value={walletUrl}
-                    onChange={(e) => { setWalletUrl(e.target.value); if (error) setError(null); }}
-                    className="block w-full flex-1 rounded-none rounded-l-md border-gray-300 dark:border-slate-600 dark:bg-slate-700 focus:border-red-500 focus:ring-red-500 sm:text-sm px-3"
-                    placeholder="https://credential.net/profile/..."
-                />
-                <button
-                    type="button"
-                    onClick={() => handleUrlSubmit('wallet')}
-                    className="relative -ml-px inline-flex items-center space-x-2 rounded-r-md border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-600 dark:text-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                >
-                    <span>Scrape</span>
-                </button>
-            </div>
-        </div>
-        <div>
+      <div className="grid md:grid-cols-1 gap-8">
+        <div className="max-w-md mx-auto w-full">
             <label htmlFor="cert-url" className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 <LinkIcon />
                 Add from single PDF URL
@@ -226,7 +197,7 @@ export default function UploadZone({ onFileSelect, onPdfUrlSelect, onWalletUrlSe
                 />
                 <button
                     type="button"
-                    onClick={() => handleUrlSubmit('pdf')}
+                    onClick={() => handleUrlSubmit()}
                     className="relative -ml-px inline-flex items-center space-x-2 rounded-r-md border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-600 dark:text-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
                 >
                     <span>Process</span>

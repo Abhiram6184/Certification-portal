@@ -35,6 +35,7 @@ const LoginWithEmail = ({
   const [empCode, setEmpCode] = useState("");
   const [employeeName, setEmployeeName] = useState("");
   const [designation, setDesignation] = useState("");
+  const [profileUrl, setProfileUrl] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,6 +80,7 @@ const LoginWithEmail = ({
         employee_name: employeeName.trim(),
         designation: designation.trim(),
         email: email.trim(),
+        profile_url: profileUrl.trim() || undefined,
       });
     }
   };
@@ -298,6 +300,13 @@ const LoginWithEmail = ({
                         required
                         value={designation}
                         onChange={(e) => setDesignation(e.target.value)}
+                        className="w-full py-2 border-b-2 border-gray-300 dark:border-slate-600 focus:border-red-500 focus:outline-none transition-colors bg-transparent text-gray-900 dark:text-gray-100"
+                      />
+                      <input
+                        type="url"
+                        placeholder="Databricks Credential Wallet URL (Optional)"
+                        value={profileUrl}
+                        onChange={(e) => setProfileUrl(e.target.value)}
                         className="w-full py-2 border-b-2 border-gray-300 dark:border-slate-600 focus:border-red-500 focus:outline-none transition-colors bg-transparent text-gray-900 dark:text-gray-100"
                       />
                       <button

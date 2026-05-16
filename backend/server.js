@@ -202,9 +202,9 @@ app.post("/api/email-login", async (req, res) => {
 
 // THIS ENDPOINT IS MIGRATED TO POSTGRESQL/LAKEBASE
 app.post("/api/register-employee", async (req, res) => {
-  const { emp_code, employee_name, designation, email } = req.body;
+  const { emp_code, employee_name, designation, email, profile_url } = req.body;
   if (!emp_code || !employee_name || !designation || !email) {
-    return res.status(400).json({ error: "All fields are required for registration." });
+    return res.status(400).json({ error: "All fields except URL are required for registration." });
   }
 
   const cleanEmail = email.trim().toLowerCase();
@@ -233,7 +233,7 @@ app.post("/api/register-employee", async (req, res) => {
       INSERT INTO ${process.env.LAKEBASE_SCHEMA}.employeedetails (emp_code, employee_name, employee_emailid, designation, profile_url)
       VALUES ($1, $2, $3, $4, $5)
     `;
-    await pgClient.query(insertQuery, [emp_code, employee_name, email, designation, null]);
+    await pgClient.query(insertQuery, [emp_code, employee_name, email, designation, profile_url || null]);
 
     console.log(`[Auth] New user ${employee_name} (${emp_code}) registered successfully via Lakebase.`);
 
@@ -243,7 +243,7 @@ app.post("/api/register-employee", async (req, res) => {
       name: employee_name,
       email: email,
       designation: designation,
-      profile_url: null,
+      profile_url: profile_url || null,
       role: 'Employee'
     };
 
