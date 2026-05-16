@@ -11,8 +11,8 @@
 // export default Logo;
 
 import React from 'react';
-import logoLight from '/assets/logo-light.png';
-import logoDark from '/assets/logo-dark.png';
+import logoLight from '../assets/logo-light.png';
+import logoDark from '../assets/logo-dark.png';
 
 interface LogoProps {
   theme: 'light' | 'dark';
