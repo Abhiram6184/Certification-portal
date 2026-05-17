@@ -1,7 +1,6 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
-  "outputDirectory": "frontend/dist",
   "functions": {
     "backend/server.js": {
       "runtime": "@vercel/node@3"
