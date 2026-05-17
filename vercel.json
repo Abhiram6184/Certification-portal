@@ -1,11 +1,12 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
-  "functions": {
-    "backend/server.js": {
-      "runtime": "@vercel/node@3"
+  "builds": [
+    {
+      "src": "backend/server.js",
+      "use": "@vercel/node"
     }
-  },
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",
