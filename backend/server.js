@@ -59,7 +59,16 @@ const PORT = process.env.PORT || 4001;
 
 // Middleware — CORS must come before Helmet so preflight OPTIONS requests are handled first
 app.use(cors({
-  origin: process.env.FRONTEND_URL || true, // Set FRONTEND_URL to your Vercel domain in production
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    // Allow any Vercel preview/production deployment
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
+    // Allow localhost for development
+    if (origin.includes('localhost')) return callback(null, true);
+    // Block everything else
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
 }));
 app.use(helmet({
