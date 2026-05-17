@@ -14,7 +14,8 @@
     "baseline-browser-mapping": "^2.9.11",
     "framer-motion": "^12.23.19",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",
