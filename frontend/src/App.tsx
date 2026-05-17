@@ -173,23 +173,23 @@ export default function App() {
     setError(null);
     try {
       const { user, acquired, available, requested } = await registerEmployee(formData);
-
+      
       let finalAcquired = acquired;
       if (formData.profile_url) {
         try {
-          const newCerts = await scrapeAndAddByUrl(formData.profile_url, user);
-
-          // Merge existing and new certificates
-          const certMap = new Map<string, CertificationRequest>();
-          acquired.forEach((cert: CertificationRequest) => certMap.set(cert.id, cert));
-          newCerts.forEach((cert: CertificationRequest) => certMap.set(cert.id, cert));
-
-          finalAcquired = Array.from(certMap.values()).sort((a: CertificationRequest, b: CertificationRequest) =>
-            new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime()
-          );
+            const newCerts = await scrapeAndAddByUrl(formData.profile_url, user);
+            
+            // Merge existing and new certificates
+            const certMap = new Map<string, CertificationRequest>();
+            acquired.forEach((cert: CertificationRequest) => certMap.set(cert.id, cert));
+            newCerts.forEach((cert: CertificationRequest) => certMap.set(cert.id, cert));
+            
+            finalAcquired = Array.from(certMap.values()).sort((a: CertificationRequest, b: CertificationRequest) => 
+                new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime()
+            );
         } catch (err: any) {
-          console.error("Initial scraping failed:", err);
-          alert("Registered successfully, but we couldn't automatically scrape your credentials right now. Error: " + err.message);
+            console.error("Initial scraping failed:", err);
+            alert("Registered successfully, but we couldn't automatically scrape your credentials right now. Error: " + err.message);
         }
       }
 
