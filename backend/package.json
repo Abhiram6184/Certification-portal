@@ -2,6 +2,7 @@
   "name": "backend-scraper",
   "version": "1.0.0",
   "description": "A backend server to scrape Databricks credentials using Playwright.",
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
