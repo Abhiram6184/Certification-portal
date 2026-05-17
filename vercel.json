@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "outputDirectory": "backend/static",
   "builds": [
     {
       "src": "backend/server.js",
@@ -17,7 +18,7 @@
     },
     {
       "source": "/(.*)",
-      "destination": "/frontend/dist/index.html"
+      "destination": "/index.html"
     }
   ]
 }
