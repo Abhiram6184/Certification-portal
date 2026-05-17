@@ -4,6 +4,19 @@ import { User, CertificationRequest, UserRole, RequestStatus, Certification, Ext
 // FIX: Removed import of non-existent `MOCK_ONGOING_REQUESTS` from `../constants` and removed the unused `fetchPortalData` function which depended on it to resolve the module error.
 import { AVAILABLE_CERTIFICATIONS } from '../constants';
 
+// API base URL: Set VITE_API_URL in Vercel env vars to your Render backend URL
+// e.g., https://certification-portal-backend.onrender.com
+// In development, leave empty to use Vite's proxy (same-origin)
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+// Custom fetch that prepends API_BASE_URL to /api/ paths
+const apiFetch: typeof fetch = (input, init?) => {
+    if (typeof input === 'string' && input.startsWith('/api/')) {
+        return fetch(`${API_BASE_URL}${input}`, init);
+    }
+    return fetch(input, init);
+};
+
 const MOCK_ADMIN_USER: User = { id: 'admin', name: 'Admin User', role: UserRole.Admin, email: 'admin@celebaltech.com' };
 
 const fileToBase64 = (file: File): Promise<string> => {
@@ -48,7 +61,7 @@ async function handleApiResponse(response: Response) {
 
 export const extractCertificateData = async (file: File): Promise<ExtractedCertificate> => {
     const base64File = await fileToBase64(file);
-    const response = await fetch('/api/extract-from-file', {
+    const response = await apiFetch('/api/extract-from-file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ base64File, mimeType: file.type, fileName: file.name }),
@@ -90,7 +103,7 @@ const mapRawCredentialToRequest = (cred: any, user: User, vendor: string = 'Data
 };
 
 export const extractCertificateDataFromUrl = async (url: string): Promise<Omit<ExtractedCertificate, 'file_name'>> => {
-    const response = await fetch('/api/extract-from-url', {
+    const response = await apiFetch('/api/extract-from-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
@@ -99,7 +112,7 @@ export const extractCertificateDataFromUrl = async (url: string): Promise<Omit<E
 };
 
 export const loginWithEmail = async (email: string) => {
-    const response = await fetch('/api/email-login', {
+    const response = await apiFetch('/api/email-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -142,7 +155,7 @@ export const loginWithEmail = async (email: string) => {
 };
 
 export const registerEmployee = async (formData: EmployeeRegistrationData) => {
-    const response = await fetch('/api/register-employee', {
+    const response = await apiFetch('/api/register-employee', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
@@ -158,7 +171,7 @@ export const registerEmployee = async (formData: EmployeeRegistrationData) => {
 };
 
 export const scrapeAndAddByUrl = async (url: string, user: User): Promise<CertificationRequest[]> => {
-    const response = await fetch('/api/scrape-and-add-by-url', {
+    const response = await apiFetch('/api/scrape-and-add-by-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, user }),
@@ -169,7 +182,7 @@ export const scrapeAndAddByUrl = async (url: string, user: User): Promise<Certif
 };
 
 export const saveNewCertificate = async (certificateData: ExtractedCertificate, user: User): Promise<CertificationRequest> => {
-    const response = await fetch('/api/add-certificate', {
+    const response = await apiFetch('/api/add-certificate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ certificateData, user }),
@@ -201,7 +214,7 @@ export const saveNewCertificate = async (certificateData: ExtractedCertificate, 
 
 export const bulkUploadCredentials = async (file: File): Promise<BulkUploadResult> => {
     const csvData = await fileToBase64(file);
-    const response = await fetch('/api/admin/bulk-upload-credentials', {
+    const response = await apiFetch('/api/admin/bulk-upload-credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ csvData }),
@@ -211,7 +224,7 @@ export const bulkUploadCredentials = async (file: File): Promise<BulkUploadResul
 
 export const bulkUploadVouchers = async (file: File): Promise<VoucherBulkUploadResult> => {
     const csvData = await fileToBase64(file);
-    const response = await fetch('/api/admin/bulk-upload-vouchers', {
+    const response = await apiFetch('/api/admin/bulk-upload-vouchers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ csvData }),
@@ -220,7 +233,7 @@ export const bulkUploadVouchers = async (file: File): Promise<VoucherBulkUploadR
 };
 
 export const submitVoucherRequest = async (formData: VoucherRequestData): Promise<CertificationRequest> => {
-    const response = await fetch('/api/request-voucher', {
+    const response = await apiFetch('/api/request-voucher', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
@@ -267,7 +280,7 @@ export const requestVoucher = async (user: User, certificationId: string): Promi
 };
 
 export const updateRequestProgress = async (requestId: string, updates: Partial<CertificationRequest>): Promise<CertificationRequest> => {
-    const response = await fetch('/api/employee/update-request', {
+    const response = await apiFetch('/api/employee/update-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ req_id: requestId, updates }),
@@ -350,7 +363,7 @@ const normalizeStatus = (status: string): RequestStatus => {
 };
 
 export const getAllRequests = async (): Promise<CertificationRequest[]> => {
-    const response = await fetch('/api/admin/all-requests');
+    const response = await apiFetch('/api/admin/all-requests');
     const dbRequests = await handleApiResponse(response);
 
     return dbRequests.map((dbRequest: any) => {
@@ -380,7 +393,7 @@ export const getAllRequests = async (): Promise<CertificationRequest[]> => {
 };
 
 export const getEmployeeRequests = async (emp_code: string): Promise<CertificationRequest[]> => {
-    const response = await fetch(`/api/employee/requests/${emp_code}`);
+    const response = await apiFetch(`/api/employee/requests/${emp_code}`);
     const dbRequests = await handleApiResponse(response);
 
     return dbRequests.map((dbRequest: any) => {
@@ -408,22 +421,22 @@ export const getEmployeeRequests = async (emp_code: string): Promise<Certificati
 };
 
 export const getAdminEmployees = async (): Promise<AdminEmployee[]> => {
-    const response = await fetch('/api/admin/employees');
+    const response = await apiFetch('/api/admin/employees');
     return handleApiResponse(response);
 };
 
 export const getLeaderboardData = async (): Promise<LeaderboardResponse> => {
-    const response = await fetch('/api/leaderboard');
+    const response = await apiFetch('/api/leaderboard');
     return handleApiResponse(response);
 };
 
 export const getIssuerLeaderboard = async (): Promise<IssuerLeaderboardEntry[]> => {
-    const response = await fetch('/api/leaderboard/by-issuer');
+    const response = await apiFetch('/api/leaderboard/by-issuer');
     return handleApiResponse(response);
 };
 
 export const getEmployeeCredentials = async (employee: AdminEmployee): Promise<CertificationRequest[]> => {
-    const response = await fetch(`/api/admin/credentials/by-emp-code/${employee.emp_code}`);
+    const response = await apiFetch(`/api/admin/credentials/by-emp-code/${employee.emp_code}`);
     const rawCredentials = await handleApiResponse(response);
 
     const user: User = {
@@ -438,17 +451,17 @@ export const getEmployeeCredentials = async (employee: AdminEmployee): Promise<C
 };
 
 export const getCredentialSummary = async (): Promise<CredentialSummary[]> => {
-    const response = await fetch('/api/admin/credentials-summary');
+    const response = await apiFetch('/api/admin/credentials-summary');
     return handleApiResponse(response);
 };
 
 export const getEmployeesByCredential = async (title: string): Promise<CredentialHolder[]> => {
-    const response = await fetch(`/api/admin/employees-by-credential?title=${encodeURIComponent(title)}`);
+    const response = await apiFetch(`/api/admin/employees-by-credential?title=${encodeURIComponent(title)}`);
     return handleApiResponse(response);
 };
 
 export const getCompleteCredentialsReport = async (): Promise<CredentialReportItem[]> => {
-    const response = await fetch('/api/admin/all-credentials-report');
+    const response = await apiFetch('/api/admin/all-credentials-report');
     return handleApiResponse(response);
 };
 
@@ -479,7 +492,7 @@ const mapDbRequestToFrontend = (dbRequest: any, originalRequest: CertificationRe
 }
 
 export const approveAndAssignRequest = async (request: CertificationRequest, adminId: string): Promise<CertificationRequest> => {
-    const response = await fetch('/api/approve-and-assign', {
+    const response = await apiFetch('/api/approve-and-assign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ req_id: request.id, adminId }),
@@ -525,7 +538,7 @@ export const updateCertificationStatus = async (
             throw new Error(`Status update for "${status}" is not handled.`);
     }
 
-    const response = await fetch(endpoint, {
+    const response = await apiFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -542,7 +555,7 @@ export const generateFulfillmentEmail = async (
   certificationName: string,
   voucherId: number | string
 ): Promise<string> => {
-  const response = await fetch('/api/generate-fulfillment-email', {
+  const response = await apiFetch('/api/generate-fulfillment-email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ employeeName, certificationName, voucherId }),
@@ -555,7 +568,7 @@ export const generateApprovalEmail = async (
   employeeName: string,
   certificationName: string
 ): Promise<string> => {
-  const response = await fetch('/api/generate-approval-email', {
+  const response = await apiFetch('/api/generate-approval-email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ employeeName, certificationName }),
@@ -569,7 +582,7 @@ export const generateDenialEmail = async (
   certificationName: string,
   reason: string
 ): Promise<string> => {
-  const response = await fetch('/api/generate-denial-email', {
+  const response = await apiFetch('/api/generate-denial-email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ employeeName, certificationName, reason }),

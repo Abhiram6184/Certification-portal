@@ -59,7 +59,10 @@ const PORT = process.env.PORT || 4001;
 
 // Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || true, // Set FRONTEND_URL to your Vercel domain in production
+  credentials: true,
+}));
 app.use(express.json({ limit: '50mb' })); // Increase limit for file uploads
 app.use(morgan("dev"));
 app.use(rateLimit({
@@ -392,32 +395,57 @@ app.post("/api/extract-from-url", async (req, res) => {
 
   try {
     console.log(`[AI] Fetching content from URL: ${url}`);
-    const pdfResponse = await fetch(url);
-    if (!pdfResponse.ok) {
-      throw new Error(`Failed to fetch from URL: ${pdfResponse.statusText}`);
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch from URL: ${response.statusText}`);
     }
 
-    const mimeType = pdfResponse.headers.get('content-type');
-    if (!mimeType || !mimeType.includes('application/pdf')) {
-      console.warn(`[AI] Content-Type from URL is not PDF (${mimeType}). The document might not be processed correctly.`);
+    const contentType = response.headers.get('content-type') || '';
+    const isPdf = contentType.includes('application/pdf');
+
+    let parts;
+
+    if (isPdf) {
+      // Handle PDF: send as inline binary data
+      console.log(`[AI] Content is PDF. Sending binary data to Gemini.`);
+      const arrayBuffer = await response.arrayBuffer();
+      const base64File = Buffer.from(arrayBuffer).toString('base64');
+      parts = [
+        { text: EXTRACTION_PROMPT },
+        { inlineData: { mimeType: 'application/pdf', data: base64File } }
+      ];
+    } else {
+      // Handle HTML (Accredible, credential.net, etc.): send page text to Gemini
+      console.log(`[AI] Content is HTML (${contentType}). Extracting text for Gemini.`);
+      const htmlText = await response.text();
+      // Strip HTML tags to get clean text, but keep structure hints
+      const cleanText = htmlText
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '') // Remove scripts
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')   // Remove styles
+        .replace(/<[^>]+>/g, ' ')                          // Remove HTML tags
+        .replace(/\s+/g, ' ')                              // Collapse whitespace
+        .trim()
+        .substring(0, 30000); // Limit to ~30k chars to stay within token limits
+
+      const htmlPrompt = `
+        Analyze the following web page content from a certificate/credential platform.
+        The URL is: ${url}
+        Extract ALL certificates/credentials found on this page.
+        For each credential, extract: issuer name, credential/certificate name, holder's full name, issued date, and expiry date.
+        If multiple credentials are found, return the first/primary one.
+        If an expiry date isn't found, return 'Does not expire'.
+        Format dates as YYYY-MM-DD.
+
+        Page content:
+        ${cleanText}
+      `;
+      parts = [{ text: htmlPrompt }];
     }
 
-    const arrayBuffer = await pdfResponse.arrayBuffer();
-    const base64File = Buffer.from(arrayBuffer).toString('base64');
-
-    console.log(`[AI] Sending PDF content from URL to Gemini for extraction.`);
-
-    const filePart = {
-      inlineData: {
-        mimeType: 'application/pdf',
-        data: base64File
-      },
-    };
-    const textPart = { text: EXTRACTION_PROMPT };
-
+    console.log(`[AI] Sending content to Gemini for extraction.`);
     const geminiResponse = await ai.models.generateContent({
       model: geminiModel,
-      contents: { parts: [textPart, filePart] },
+      contents: { parts },
       config: {
         responseMimeType: "application/json",
         responseSchema: EXTRACTION_SCHEMA
