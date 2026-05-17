@@ -57,11 +57,13 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 4001;
 
-// Middleware
-app.use(helmet());
+// Middleware — CORS must come before Helmet so preflight OPTIONS requests are handled first
 app.use(cors({
   origin: process.env.FRONTEND_URL || true, // Set FRONTEND_URL to your Vercel domain in production
   credentials: true,
+}));
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
 }));
 app.use(express.json({ limit: '50mb' })); // Increase limit for file uploads
 app.use(morgan("dev"));
